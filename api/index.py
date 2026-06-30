@@ -133,7 +133,7 @@ HTML_TEMPLATE = """
             fetch('/api/clipboard')
                 .then(r => r.json())
                 .then(data => {
-if (data.text !== "" && editor.innerHTML === "") {
+if (data.text !== "" && editor.innerText === "") {
     editor.innerHTML = "正在加载内容...";
 }                    // 如果服务器内容没变，直接返回
                     if (data.text === lastContent) return;
