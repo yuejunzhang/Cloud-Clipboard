@@ -73,7 +73,7 @@ HTML_TEMPLATE = """
 <body>
     <h1>📋 云端共享剪贴板</h1>
     <p>已部署至 Vercel </p>
-    <textarea id="content" placeholder="输入内容..."></textarea>
+            <div id="editor" class="editor" contenteditable="true" data-placeholder="在这里输入文字，或直接粘贴图片 (Ctrl+V)..."></div>
     <br>
     <button onclick="saveText()">💾 分享到云端</button>
     <button onclick="copyText()">📋 复制到本地</button>
