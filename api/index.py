@@ -21,14 +21,14 @@ def set_content(text):
     if r:
         r.set("clipboard_content", text)
 
-# --- 支持图文混排的 Web UI 模板 ---
+# --- 稳定支持图文混排的 Web UI 模板 ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>云共享剪贴板 </title>
+    <title>云共享剪贴板 (稳定图文版)</title>
     <style>
         :root { --primary: #4f46e5; --bg: #f3f4f6; --card: #ffffff; --text: #1f2937; --border: #d1d5db; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; justify-content: center; }
@@ -37,7 +37,6 @@ HTML_TEMPLATE = """
         .subtitle { text-align: center; color: #6b7280; font-size: 14px; margin-bottom: 20px; }
         .card { background: var(--card); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); padding: 20px; }
         
-        /* 富文本编辑器样式 */
         .editor { 
             width: 100%; min-height: 400px; max-height: 600px; overflow-y: auto; 
             padding: 15px; font-size: 16px; line-height: 1.5; 
@@ -59,63 +58,118 @@ HTML_TEMPLATE = """
         .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100;}
         .toast.show { opacity: 1; }
         .status { text-align: center; font-size: 12px; color: #9ca3af; margin-top: 15px; }
-        .warning { color: #ef4444; font-size: 12px; text-align: center; margin-top: 10px; background: #fef2f2; padding: 8px; border-radius: 6px;}
     </style>
 </head>
 <body>
     <div class="container">
         <h1>📋 云共享剪贴板</h1>
-        <p class="subtitle">支持图文混排 · 跨设备实时同步 · 完美写入系统剪贴板</p>
+        <p class="subtitle">支持图文混排 · 自动压缩 · 跨设备稳定同步</p>
         
         <div class="card">
-            <!-- 使用 contenteditable 替代 textarea -->
             <div id="editor" class="editor" contenteditable="true" data-placeholder="在这里输入文字，或直接粘贴图片 (Ctrl+V / Cmd+V)..."></div>
             
             <div class="actions">
                 <button class="btn-primary" onclick="copyContent()">📋 复制内容到本地</button>
                 <button class="btn-secondary" onclick="saveText()">💾 保存并同步</button>
             </div>
-            <p class="warning">⚠️ Vercel 免费版限制单次请求 4MB，请勿粘贴超大高清原图，建议粘贴截图或压缩图。</p>
         </div>
-        <p class="status">每 2 秒自动同步一次 · 粘贴图片会自动转码</p>
+        <p class="status">每 2 秒自动同步 · 粘贴图片会自动压缩并保存</p>
     </div>
 
     <div id="toast" class="toast"></div>
 
     <script>
         let lastContent = "";
+        let isSaving = false; // 并发锁，防止保存时被轮询覆盖
         const editor = document.getElementById('editor');
 
-        // 1. 拦截粘贴事件，处理图片转 Base64
-        editor.addEventListener('paste', (e) => {
+        // --- 工具函数：Base64 转 Blob (用于写入系统剪贴板) ---
+        function dataURItoBlob(dataURI) {
+            const byteString = atob(dataURI.split(',')[1]);
+            const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+            return new Blob([ab], {type: mimeString});
+        }
+
+        // --- 工具函数：图片压缩 (防止超过 Vercel 4MB 限制) ---
+        function compressImage(file, maxWidth = 1200, quality = 0.8) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width, height = img.height;
+                        if (width > maxWidth) {
+                            height = (maxWidth / width) * height;
+                            width = maxWidth;
+                        }
+                        canvas.width = width; canvas.height = height;
+                        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                        
+                        canvas.toBlob((blob) => {
+                            const blobReader = new FileReader();
+                            blobReader.onloadend = () => resolve(blobReader.result);
+                            blobReader.readAsDataURL(blob);
+                        }, file.type || 'image/png', quality);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 1. 拦截粘贴事件，压缩并插入图片
+        editor.addEventListener('paste', async (e) => {
             const items = e.clipboardData.items;
-            let hasImage = false;
-            
             for (let item of items) {
                 if (item.type.startsWith('image/')) {
-                    hasImage = true;
                     e.preventDefault(); 
                     const file = item.getAsFile();
+                    if (!file) continue;
                     
-                    // 简单压缩/限制大小 (可选，这里直接读取)
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
+                    showToast("🖼️ 正在压缩并插入图片...");
+                    try {
+                        const base64 = await compressImage(file);
                         const img = document.createElement('img');
-                        img.src = event.target.result;
+                        img.src = base64;
                         editor.appendChild(img);
                         editor.appendChild(document.createElement('br')); 
-                        saveText(true); // 粘贴后自动保存
-                        showToast("🖼️ 图片已插入并同步");
-                    };
-                    reader.readAsDataURL(file);
+                        saveText(true); // 自动保存
+                        showToast("✅ 图片已插入并同步");
+                    } catch (err) {
+                        showToast("❌ 图片处理失败");
+                    }
+                    break; 
                 }
             }
         });
 
+        // 2. 自动轮询同步 (带防覆盖保护)
+        function sync() {
+            if (isSaving) return; // 正在保存时，跳过同步
+            
+            fetch('/api/clipboard')
+                .then(r => r.json())
+                .then(data => {
+                    // 核心保护：如果服务器返回空，但本地有内容，大概率是并发导致的旧数据，拒绝覆盖！
+                    if (data.text === "" && editor.innerHTML.trim() !== "") return;
+                    
+                    if (data.text !== lastContent && document.activeElement !== editor) {
+                        editor.innerHTML = data.text;
+                        lastContent = data.text;
+                    }
+                })
+                .catch(err => console.error("Sync error:", err));
+        }
+        setInterval(sync, 2000);
+        sync(); 
 
-
-        // 3. 保存内容到服务器
+        // 3. 保存内容到服务器 (带并发锁)
         function saveText(isAuto = false) {
+            isSaving = true; 
             const htmlContent = editor.innerHTML;
             const textToSave = htmlContent.replace(/^(<br\s*\/?>|\s)+|(<br\s*\/?>|\s)+$/g, '') === '' ? "" : htmlContent;
 
@@ -131,56 +185,36 @@ HTML_TEMPLATE = """
                     if(!isAuto) showToast("✅ 已保存到云端");
                 }
             })
-            .catch(err => {
-                if (err.message.includes('413')) {
-                    showToast("❌ 图片太大，超过 4MB 限制！");
-                } else {
-                    showToast("❌ 保存失败");
-                }
-            });
+            .catch(err => showToast("❌ 保存失败，请检查网络或图片大小"))
+            .finally(() => { isSaving = false; }); // 解锁
         }
 
-        // 4. 核心：复制内容到系统剪贴板 (支持图片)
+        // 4. 复制内容到系统剪贴板 (完美支持图片)
         async function copyContent() {
             if (!editor.innerText.trim() && editor.getElementsByTagName('img').length === 0) {
-                showToast("⚠️ 内容为空");
-                return;
+                showToast("⚠️ 内容为空"); return;
             }
 
             try {
-                const htmlContent = editor.innerHTML;
-                const textContent = editor.innerText;
+                const htmlBlob = new Blob([editor.innerHTML], { type: 'text/html' });
+                const textBlob = new Blob([editor.innerText], { type: 'text/plain' });
+                let clipboardData = { 'text/html': htmlBlob, 'text/plain': textBlob };
 
-                // 准备基础数据
-                const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
-                const textBlob = new Blob([textContent], { type: 'text/plain' });
-                
-                let clipboardData = {
-                    'text/html': htmlBlob,
-                    'text/plain': textBlob
-                };
-
-                // 提取第一张图片，转换为 Blob 写入系统剪贴板 (兼容微信/Word等软件)
+                // 提取图片并转为 Blob
                 const img = editor.querySelector('img');
                 if (img && img.src.startsWith('data:image')) {
                     try {
-                        const response = await fetch(img.src);
-                        const blob = await response.blob();
-                        // 统一使用 image/png 格式，兼容性最好
+                        const blob = dataURItoBlob(img.src);
                         clipboardData['image/png'] = blob; 
-                    } catch (e) {
-                        console.warn("提取图片 Blob 失败", e);
-                    }
+                    } catch (e) { console.warn("提取图片失败", e); }
                 }
 
-                // 使用现代 Clipboard API 写入
                 const item = new ClipboardItem(clipboardData);
                 await navigator.clipboard.write([item]);
                 showToast("✅ 已复制图文到本地剪贴板");
 
             } catch (err) {
-                console.error("复制失败:", err);
-                // 降级方案：只复制纯文本
+                // 降级方案
                 try {
                     await navigator.clipboard.writeText(editor.innerText);
                     showToast("⚠️ 图片复制受限，已复制纯文本");
