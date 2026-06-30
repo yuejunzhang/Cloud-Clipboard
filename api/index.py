@@ -66,7 +66,7 @@ HTML_TEMPLATE = """
         .btn-secondary { background-color: #10b981; color: white; }
         .btn-secondary:hover { background-color: #059669; }
         
-        .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100;}
+        .toast { position: fixed; bottom: 300px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100;}
         .toast.show { opacity: 1; }
         .status { text-align: center; font-size: 12px; color: #9ca3af; margin-top: 15px; }
         .warning { color: #ef4444; font-size: 12px; text-align: center; margin-top: 10px;}
