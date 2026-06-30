@@ -81,7 +81,8 @@ HTML_TEMPLATE = """
             <!-- 使用 contenteditable 替代 textarea -->
             <div id="editor" class="editor" contenteditable="true" data-placeholder="在这里输入文字，或直接粘贴图片 (Ctrl+V)..."></div>
             
-            <div class="actions"><button class="btn-primary" onclick="sync()">🔄 刷新内容</button>
+            <div class="actions">
+            <button class="btn-primary" onclick="window.location.reload()">🔄 刷新内容</button>
                 <button class="btn-primary" onclick="copyContent()">📋 复制内容到本地</button>
                 <button class="btn-secondary" onclick="saveText()">📝 分享内容到云端</button>
             </div>
