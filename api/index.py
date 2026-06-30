@@ -112,20 +112,7 @@ HTML_TEMPLATE = """
             }
         });
 
-        // 2. 自动轮询同步
-        function sync() {
-            fetch('/api/clipboard')
-                .then(r => r.json())
-                .then(data => {
-                    if (data.text !== lastContent && document.activeElement !== editor) {
-                        editor.innerHTML = data.text;
-                        lastContent = data.text;
-                    }
-                })
-                .catch(err => console.error("Sync error:", err));
-        }
-        setInterval(sync, 2000);
-        sync(); 
+
 
         // 3. 保存内容到服务器
         function saveText(isAuto = false) {
