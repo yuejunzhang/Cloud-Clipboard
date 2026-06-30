@@ -75,7 +75,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <h1>📋 云共享剪贴板</h1>
-        <p class="subtitle">可编辑内容分享到云端，或将云端内容复制到本地。</p>
+        <p class="subtitle">可编辑内容分享到云端，或将云端内容复制到本地。(也可作为公开聊天室。)</p>
         
         <div class="card">
             <!-- 使用 contenteditable 替代 textarea -->
@@ -148,7 +148,7 @@ HTML_TEMPLATE = """
             
             // 简单优化：如果内容只是 <br> 或空，视为空字符串
             const textToSave = htmlContent.replace(/^(<br\s*\/?>|\s)+|(<br\s*\/?>|\s)+$/g, '') === '' ? "" : htmlContent;
-
+textToSave=textToSave+'\n'
             fetch('/api/clipboard', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
