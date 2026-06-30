@@ -94,47 +94,60 @@ HTML_TEMPLATE = """
 
     <script>
         let lastContent = "";
+        let isUserTyping = false; // 核心状态：标记用户是否正在输入
         const editor = document.getElementById('editor');
+
+        // --- 状态监听：当用户开始输入时，标记为正在编辑 ---
+        editor.addEventListener('input', () => {
+            isUserTyping = true;
+        });
 
         // 1. 拦截粘贴事件，处理图片
         editor.addEventListener('paste', (e) => {
             const items = e.clipboardData.items;
-            let hasImage = false;
-            
             for (let item of items) {
                 if (item.type.startsWith('image/')) {
-                    hasImage = true;
-                    e.preventDefault(); // 阻止默认粘贴行为
-                    
+                    e.preventDefault(); 
                     const file = item.getAsFile();
-                    const reader = new FileReader();
+                    if (!file) continue;
                     
+                    const reader = new FileReader();
                     reader.onload = (event) => {
-                        // 将图片转为 Base64 并插入编辑器
                         const img = document.createElement('img');
                         img.src = event.target.result;
                         editor.appendChild(img);
-                        editor.appendChild(document.createElement('br')); // 换行
+                        editor.appendChild(document.createElement('br')); 
                         
                         // 粘贴图片后自动保存
                         saveText(true); 
                         showToast("🖼️ 图片已插入");
                     };
                     reader.readAsDataURL(file);
+                    break; 
                 }
             }
-            // 如果是纯文本，不阻止默认行为，让它正常粘贴
         });
 
-        // 2. 自动轮询同步 (每2秒)
+        // 2. 自动轮询同步 (智能防覆盖逻辑)
         function sync() {
             fetch('/api/clipboard')
                 .then(r => r.json())
                 .then(data => {
-                    // 如果服务器内容变了，且当前编辑器没有获得焦点
-                    if (data.text !== lastContent && document.activeElement !== editor) {
+                    // 如果服务器内容没变，直接返回
+                    if (data.text === lastContent) return;
+
+                    const isFocused = document.activeElement === editor;
+
+                    // 核心逻辑：
+                    // 如果没有焦点，或者虽然有焦点但用户还没开始打字 (isUserTyping === false) -> 安全刷新
+                    if (!isFocused || !isUserTyping) {
                         editor.innerHTML = data.text;
                         lastContent = data.text;
+                        // 刷新后重置状态
+                        isUserTyping = false; 
+                    } else {
+                        // 正在打字中 -> 拒绝刷新，保护用户输入，并给出提示
+                        showToast("🔔 收到新内容，正在保护您的编辑...");
                     }
                 })
                 .catch(err => console.error("Sync error:", err));
@@ -142,13 +155,14 @@ HTML_TEMPLATE = """
         setInterval(sync, 2000);
         sync(); 
 
-        // 3. 保存内容到服务器
+        // 3. 保存内容到服务器 (优化了空值判断)
         function saveText(isAuto = false) {
-            const htmlContent = editor.innerHTML;
-            
-            // 简单优化：如果内容只是 <br> 或空，视为空字符串
-            const textToSave = htmlContent.replace(/^(<br\s*\/?>|\s)+|(<br\s*\/?>|\s)+$/g, '') === '' ? "" : htmlContent;
-textToSave=textToSave+'\n'
+            // 智能判断是否为空：如果没有纯文本，且没有图片，则视为空字符串
+            // 彻底抛弃容易出错的正则表达式和 \n 拼接
+            const hasText = editor.innerText.trim().length > 0;
+            const hasImage = editor.getElementsByTagName('img').length > 0;
+            let textToSave = (hasText || hasImage) ? editor.innerHTML : "";
+textToSave+='\n';
             fetch('/api/clipboard', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -158,20 +172,19 @@ textToSave=textToSave+'\n'
             .then(data => {
                 if(data.status === 'success') {
                     lastContent = textToSave; 
+                    isUserTyping = false; // 关键：保存成功后，重置输入状态
                     if(!isAuto) showToast("✅ 已分享到云端");
                 }
             });
         }
 
-        // 4. 复制内容
+        // 4. 复制内容到系统剪贴板
         function copyContent() {
             if (!editor.innerText.trim() && editor.getElementsByTagName('img').length === 0) {
                 showToast("⚠️ 内容为空");
                 return;
             }
 
-            // 尝试使用现代 API 复制富文本 (包含图片)
-            // 注意：在局域网 HTTP 下，这通常会失败，会走 catch 逻辑
             try {
                 const htmlBlob = new Blob([editor.innerHTML], { type: 'text/html' });
                 const textBlob = new Blob([editor.innerText], { type: 'text/plain' });
@@ -190,10 +203,10 @@ textToSave=textToSave+'\n'
             }
         }
 
-        // 回退复制方案 (只能复制纯文本)
+        // 回退复制方案
         function fallbackCopy() {
             const textArea = document.createElement("textarea");
-            textArea.value = editor.innerText; // 只复制纯文本部分
+            textArea.value = editor.innerText; 
             document.body.appendChild(textArea);
             textArea.select();
             try {
@@ -209,7 +222,7 @@ textToSave=textToSave+'\n'
             const toast = document.getElementById('toast');
             toast.innerText = msg;
             toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 2000);
+            setTimeout(() => toast.classList.remove('show'), 2500);
         }
     </script>
 </body>
