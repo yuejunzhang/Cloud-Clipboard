@@ -130,11 +130,12 @@ HTML_TEMPLATE = """
 
         // 2. 自动轮询同步 (智能防覆盖逻辑)
         function sync() {
+            editor.innerHTML = "正在加载内容...";
             fetch('/api/clipboard')
                 .then(r => r.json())
                 .then(data => {
-if (data.text !== "" && data.text !== lastContent) {
-    editor.innerHTML = "正在加载内容...";
+if (data.text === "") {
+    editor.innerHTML = "";
 }                    // 如果服务器内容没变，直接返回
                     if (data.text === lastContent) return;
 
