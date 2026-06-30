@@ -75,7 +75,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <h1>📋 云共享剪贴板</h1>
-        <p class="subtitle">可编辑内容分享到云端，或将云端内容复制到本地。(也可作为公开聊天室。)</p>
+        <p class="subtitle">可编辑内容分享到云端，或将云端内容复制到本地。(内容会在几分钟后失效)</p>
         
         <div class="card">
             <!-- 使用 contenteditable 替代 textarea -->
@@ -152,6 +152,8 @@ HTML_TEMPLATE = """
                 })
                 .catch(err => console.error("Sync error:", err));
         }
+                sync(); 
+
         setInterval(sync, 2000);
         sync(); 
 
