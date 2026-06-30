@@ -156,8 +156,8 @@ if (data.text !== "" && editor.innerText === "") {
         }
                 sync(); 
 
-        setInterval(sync, 2000);
-        sync(); 
+        # setInterval(sync, 2000);
+        # sync(); 
 
         // 3. 保存内容到服务器 (优化了空值判断)
         function saveText(isAuto = false) {
