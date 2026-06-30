@@ -158,7 +158,7 @@ HTML_TEMPLATE = """
         // 3. 保存内容到服务器 (优化了空值判断)
         function saveText(isAuto = false) {
             // 智能判断是否为空：如果没有纯文本，且没有图片，则视为空字符串
-            // 彻底抛弃容易出错的正则表达式和 \n 拼接
+            // 彻底抛弃容易出错的正则表达式和 
             const hasText = editor.innerText.trim().length > 0;
             const hasImage = editor.getElementsByTagName('img').length > 0;
                         let textToSave = htmlContent.replace(/^(<br\s*\/?>|\s)+|(<br\s*\/?>|\s)+$/g, '') === '' ? "" : htmlContent;
