@@ -78,85 +78,16 @@ HTML_TEMPLATE = """
 
     <div id="toast" class="toast"></div>
 
-    <script>
+        <script>
         let lastContent = "";
-        let isSaving = false; // 并发锁，防止保存时被轮询覆盖
         const editor = document.getElementById('editor');
 
-        // --- 工具函数：Base64 转 Blob (用于写入系统剪贴板) ---
-        function dataURItoBlob(dataURI) {
-            const byteString = atob(dataURI.split(',')[1]);
-            const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
-            const ab = new ArrayBuffer(byteString.length);
-            const ia = new Uint8Array(ab);
-            for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-            return new Blob([ab], {type: mimeString});
-        }
-
-        // --- 工具函数：图片压缩 (防止超过 Vercel 4MB 限制) ---
-        function compressImage(file, maxWidth = 1200, quality = 0.8) {
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        let width = img.width, height = img.height;
-                        if (width > maxWidth) {
-                            height = (maxWidth / width) * height;
-                            width = maxWidth;
-                        }
-                        canvas.width = width; canvas.height = height;
-                        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-                        
-                        canvas.toBlob((blob) => {
-                            const blobReader = new FileReader();
-                            blobReader.onloadend = () => resolve(blobReader.result);
-                            blobReader.readAsDataURL(blob);
-                        }, file.type || 'image/png', quality);
-                    };
-                    img.src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-
-        // 1. 拦截粘贴事件，压缩并插入图片
-        editor.addEventListener('paste', async (e) => {
-            const items = e.clipboardData.items;
-            for (let item of items) {
-                if (item.type.startsWith('image/')) {
-                    e.preventDefault(); 
-                    const file = item.getAsFile();
-                    if (!file) continue;
-                    
-                    showToast("🖼️ 正在压缩并插入图片...");
-                    try {
-                        const base64 = await compressImage(file);
-                        const img = document.createElement('img');
-                        img.src = base64;
-                        editor.appendChild(img);
-                        editor.appendChild(document.createElement('br')); 
-                        saveText(true); // 自动保存
-                        showToast("✅ 图片已插入并同步");
-                    } catch (err) {
-                        showToast("❌ 图片处理失败");
-                    }
-                    break; 
-                }
-            }
-        });
-
-        // 2. 自动轮询同步 (带防覆盖保护)
+        // 1. 自动轮询同步 (完全照搬旧代码逻辑)
         function sync() {
-            if (isSaving) return; // 正在保存时，跳过同步
-            
             fetch('/api/clipboard')
                 .then(r => r.json())
                 .then(data => {
-                    // 核心保护：如果服务器返回空，但本地有内容，大概率是并发导致的旧数据，拒绝覆盖！
-                    if (data.text === "" && editor.innerHTML.trim() !== "") return;
-                    
+                    // 核心：如果服务器数据变了，且当前没有正在编辑（焦点不在 editor 上）
                     if (data.text !== lastContent && document.activeElement !== editor) {
                         editor.innerHTML = data.text;
                         lastContent = data.text;
@@ -165,13 +96,12 @@ HTML_TEMPLATE = """
                 .catch(err => console.error("Sync error:", err));
         }
         setInterval(sync, 2000);
-        sync(); 
+        sync(); // 页面加载时立即执行一次
 
-        // 3. 保存内容到服务器 (带并发锁)
-        function saveText(isAuto = false) {
-            isSaving = true; 
-            const htmlContent = editor.innerHTML;
-            const textToSave = htmlContent.replace(/^(<br\s*\/?>|\s)+|(<br\s*\/?>|\s)+$/g, '') === '' ? "" : htmlContent;
+        // 2. 保存内容到服务器 (极简逻辑)
+        function saveText() {
+            // 直接获取 innerHTML，不做任何复杂的正则清理
+            const textToSave = editor.innerHTML;
 
             fetch('/api/clipboard', {
                 method: 'POST',
@@ -181,15 +111,40 @@ HTML_TEMPLATE = """
             .then(r => r.json())
             .then(data => {
                 if(data.status === 'success') {
+                    // 关键：保存成功后，用实际保存的内容更新 lastContent
+                    // 这能确保 lastContent 和 editor 的实际状态完全一致，避免浏览器自动添加标签导致的比对失效
                     lastContent = textToSave; 
-                    if(!isAuto) showToast("✅ 已保存到云端");
+                    showToast("✅ 已分享到云端");
                 }
-            })
-            .catch(err => showToast("❌ 保存失败，请检查网络或图片大小"))
-            .finally(() => { isSaving = false; }); // 解锁
+            });
         }
 
-        // 4. 复制内容到系统剪贴板 (完美支持图片)
+        // 3. 拦截粘贴事件，处理图片转 Base64 (这是唯一新增的复杂逻辑，但独立于同步机制)
+        editor.addEventListener('paste', (e) => {
+            const items = e.clipboardData.items;
+            for (let item of items) {
+                if (item.type.startsWith('image/')) {
+                    e.preventDefault(); 
+                    const file = item.getAsFile();
+                    if (!file) continue;
+                    
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const img = document.createElement('img');
+                        img.src = event.target.result;
+                        editor.appendChild(img);
+                        editor.appendChild(document.createElement('br')); 
+                        // 粘贴图片后自动触发保存
+                        saveText(); 
+                        showToast("🖼️ 图片已插入并同步");
+                    };
+                    reader.readAsDataURL(file);
+                    break; 
+                }
+            }
+        });
+
+        // 4. 复制内容到系统剪贴板 (支持图文)
         async function copyContent() {
             if (!editor.innerText.trim() && editor.getElementsByTagName('img').length === 0) {
                 showToast("⚠️ 内容为空"); return;
@@ -200,13 +155,15 @@ HTML_TEMPLATE = """
                 const textBlob = new Blob([editor.innerText], { type: 'text/plain' });
                 let clipboardData = { 'text/html': htmlBlob, 'text/plain': textBlob };
 
-                // 提取图片并转为 Blob
+                // 提取第一张图片转为 Blob
                 const img = editor.querySelector('img');
                 if (img && img.src.startsWith('data:image')) {
-                    try {
-                        const blob = dataURItoBlob(img.src);
-                        clipboardData['image/png'] = blob; 
-                    } catch (e) { console.warn("提取图片失败", e); }
+                    const byteString = atob(img.src.split(',')[1]);
+                    const mimeString = img.src.split(',')[0].split(':')[1].split(';')[0];
+                    const ab = new ArrayBuffer(byteString.length);
+                    const ia = new Uint8Array(ab);
+                    for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+                    clipboardData['image/png'] = new Blob([ab], {type: mimeString});
                 }
 
                 const item = new ClipboardItem(clipboardData);
