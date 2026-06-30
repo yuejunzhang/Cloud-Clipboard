@@ -82,21 +82,21 @@ HTML_TEMPLATE = """
         let lastContent = "";
         const editor = document.getElementById('editor');
 
-        // 1. 自动轮询同步 (完全照搬旧代码逻辑)
-        function sync() {
-            fetch('/api/clipboard')
-                .then(r => r.json())
-                .then(data => {
-                    // 核心：如果服务器数据变了，且当前没有正在编辑（焦点不在 editor 上）
-                    if (data.text !== lastContent && document.activeElement !== editor) {
-                        editor.innerHTML = data.text;
-                        lastContent = data.text;
-                    }
-                })
-                .catch(err => console.error("Sync error:", err));
-        }
-        setInterval(sync, 2000);
-        sync(); // 页面加载时立即执行一次
+        # // 1. 自动轮询同步 (完全照搬旧代码逻辑)
+        # function sync() {
+        #     fetch('/api/clipboard')
+        #         .then(r => r.json())
+        #         .then(data => {
+        #             // 核心：如果服务器数据变了，且当前没有正在编辑（焦点不在 editor 上）
+        #             if (data.text !== lastContent && document.activeElement !== editor) {
+        #                 editor.innerHTML = data.text;
+        #                 lastContent = data.text;
+        #             }
+        #         })
+        #         .catch(err => console.error("Sync error:", err));
+        # }
+        # setInterval(sync, 2000);
+        # sync(); // 页面加载时立即执行一次
 
         // 2. 保存内容到服务器 (极简逻辑)
         function saveText() {
