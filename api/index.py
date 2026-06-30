@@ -156,13 +156,19 @@ HTML_TEMPLATE = """
         sync(); 
 
         // 3. 保存内容到服务器 (优化了空值判断)
+        // 3. 保存内容到服务器 (智能追加单个换行)
         function saveText(isAuto = false) {
-            // 智能判断是否为空：如果没有纯文本，且没有图片，则视为空字符串
-            // 彻底抛弃容易出错的正则表达式和 \n 拼接
             const hasText = editor.innerText.trim().length > 0;
             const hasImage = editor.getElementsByTagName('img').length > 0;
+            
+            // 注意：这里必须用 let，因为后面要修改它
             let textToSave = (hasText || hasImage) ? editor.innerHTML : "";
-textToSave+='\n';
+
+            // 核心逻辑：如果内容不为空，且末尾没有 <br>，则追加一个 <br> (HTML 的换行)
+            if (textToSave !== "" && !textToSave.endsWith('<br>') && !textToSave.endsWith('<br/>')) {
+                textToSave += '<br>';
+            }
+
             fetch('/api/clipboard', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -172,7 +178,7 @@ textToSave+='\n';
             .then(data => {
                 if(data.status === 'success') {
                     lastContent = textToSave; 
-                    isUserTyping = false; // 关键：保存成功后，重置输入状态
+                    isUserTyping = false; 
                     if(!isAuto) showToast("✅ 已分享到云端");
                 }
             });
