@@ -75,17 +75,17 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <h1>📋 云共享剪贴板</h1>
-        <p class="subtitle">支持图文混排 · 局域网内实时同步</p>
+        <p class="subtitle">可编辑内容分享到云端，或将云端内容复制到本地。</p>
         
         <div class="card">
             <!-- 使用 contenteditable 替代 textarea -->
             <div id="editor" class="editor" contenteditable="true" data-placeholder="在这里输入文字，或直接粘贴图片 (Ctrl+V)..."></div>
             
             <div class="actions">
-                <button class="btn-primary" onclick="copyContent()">📋 复制内容</button>
-                <button class="btn-secondary" onclick="saveText()">📝 分享内容</button>
+                <button class="btn-primary" onclick="copyContent()">📋 复制内容到本地</button>
+                <button class="btn-secondary" onclick="saveText()">📝 分享内容到云端</button>
             </div>
-            <p class="warning">⚠️ 受限于浏览器安全策略，图片无法直接写入系统剪贴板，请右键图片复制或长按保存。</p>
+            <p class="warning">⚠️ 受限于浏览器安全策略，若图片无法直接写入本地剪贴板，请右键图片复制或长按保存。</p>
         </div>
         <p class="status">每 2 秒自动同步一次 · 粘贴图片会自动上传</p>
     </div>
