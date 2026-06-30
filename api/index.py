@@ -5,21 +5,31 @@ from flask import Flask, request, jsonify, render_template_string
 app = Flask(__name__)
 
 # --- 数据库连接 (Vercel KV / Redis) ---
+# Vercel 绑定 KV 后会自动注入 KV_URL 环境变量
 redis_url = os.environ.get("KV_URL")
 if redis_url:
+    # ssl_cert_reqs=None 用于避免 Serverless 环境下的 SSL 证书报错
     r = redis.from_url(redis_url, ssl_cert_reqs=None)
 else:
     r = None
+    print("⚠️ 警告: 未找到 KV_URL，数据将仅保存在内存中（重启/冷启动会丢失）")
+
+# 内存回退变量 (仅用于本地测试)
+memory_content = ""
 
 def get_content():
+    global memory_content
     if r:
         val = r.get("clipboard_content")
         return val.decode('utf-8') if val else ""
-    return ""
+    return memory_content
 
 def set_content(text):
+    global memory_content
     if r:
         r.set("clipboard_content", text)
+    else:
+        memory_content = text
 
 # --- 稳定支持图文混排的 Web UI 模板 ---
 HTML_TEMPLATE = """
@@ -28,7 +38,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>云共享剪贴板 (稳定图文版)</title>
+    <title>云共享剪贴板 </title>
     <style>
         :root { --primary: #4f46e5; --bg: #f3f4f6; --card: #ffffff; --text: #1f2937; --border: #d1d5db; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; justify-content: center; }
@@ -61,131 +71,41 @@ HTML_TEMPLATE = """
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📋 云共享剪贴板</h1>
-        <p class="subtitle">支持图文混排 · 自动压缩 · 跨设备稳定同步</p>
-        
-        <div class="card">
-            <div id="editor" class="editor" contenteditable="true" data-placeholder="在这里输入文字，或直接粘贴图片 (Ctrl+V / Cmd+V)..."></div>
-            
-            <div class="actions">
-                <button class="btn-primary" onclick="copyContent()">📋 复制内容到本地</button>
-                <button class="btn-secondary" onclick="saveText()">💾 保存并同步</button>
-            </div>
-        </div>
-        <p class="status">每 2 秒自动同步 · 粘贴图片会自动压缩并保存</p>
-    </div>
+    <h1>📋 云端共享剪贴板</h1>
+    <p>已部署至 Vercel </p>
+    <textarea id="content" placeholder="输入内容..."></textarea>
+    <br>
+    <button onclick="saveText()">💾 分享到云端</button>
+    <button onclick="copyText()">📋 复制到本地</button>
 
-    <div id="toast" class="toast"></div>
-
-        <script>
-        let lastContent = "";
-        const editor = document.getElementById('editor');
-
-        # // 1. 自动轮询同步 (完全照搬旧代码逻辑)
-        # function sync() {
-        #     fetch('/api/clipboard')
-        #         .then(r => r.json())
-        #         .then(data => {
-        #             // 核心：如果服务器数据变了，且当前没有正在编辑（焦点不在 editor 上）
-        #             if (data.text !== lastContent && document.activeElement !== editor) {
-        #                 editor.innerHTML = data.text;
-        #                 lastContent = data.text;
-        #             }
-        #         })
-        #         .catch(err => console.error("Sync error:", err));
-        # }
-        # setInterval(sync, 2000);
-        # sync(); // 页面加载时立即执行一次
-
-        // 2. 保存内容到服务器 (极简逻辑)
-        function saveText() {
-            // 直接获取 innerHTML，不做任何复杂的正则清理
-            const textToSave = editor.innerHTML;
-
-            fetch('/api/clipboard', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({text: textToSave})
-            })
-            .then(r => r.json())
-            .then(data => {
-                if(data.status === 'success') {
-                    // 关键：保存成功后，用实际保存的内容更新 lastContent
-                    // 这能确保 lastContent 和 editor 的实际状态完全一致，避免浏览器自动添加标签导致的比对失效
-                    lastContent = textToSave; 
-                    showToast("✅ 已分享到云端");
+    <script>
+        // 1. 自动同步
+        function sync() {
+            fetch('/api/clipboard').then(r => r.json()).then(data => {
+                if (document.activeElement !== document.getElementById('content')) {
+                    document.getElementById('content').value = data.text;
                 }
             });
         }
+        setInterval(sync, 2000);
+        sync();
 
-        // 3. 拦截粘贴事件，处理图片转 Base64 (这是唯一新增的复杂逻辑，但独立于同步机制)
-        editor.addEventListener('paste', (e) => {
-            const items = e.clipboardData.items;
-            for (let item of items) {
-                if (item.type.startsWith('image/')) {
-                    e.preventDefault(); 
-                    const file = item.getAsFile();
-                    if (!file) continue;
-                    
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        const img = document.createElement('img');
-                        img.src = event.target.result;
-                        editor.appendChild(img);
-                        editor.appendChild(document.createElement('br')); 
-                        // 粘贴图片后自动触发保存
-                        saveText(); 
-                        showToast("🖼️ 图片已插入并同步");
-                    };
-                    reader.readAsDataURL(file);
-                    break; 
-                }
-            }
-        });
-
-        // 4. 复制内容到系统剪贴板 (支持图文)
-        async function copyContent() {
-            if (!editor.innerText.trim() && editor.getElementsByTagName('img').length === 0) {
-                showToast("⚠️ 内容为空"); return;
-            }
-
-            try {
-                const htmlBlob = new Blob([editor.innerHTML], { type: 'text/html' });
-                const textBlob = new Blob([editor.innerText], { type: 'text/plain' });
-                let clipboardData = { 'text/html': htmlBlob, 'text/plain': textBlob };
-
-                // 提取第一张图片转为 Blob
-                const img = editor.querySelector('img');
-                if (img && img.src.startsWith('data:image')) {
-                    const byteString = atob(img.src.split(',')[1]);
-                    const mimeString = img.src.split(',')[0].split(':')[1].split(';')[0];
-                    const ab = new ArrayBuffer(byteString.length);
-                    const ia = new Uint8Array(ab);
-                    for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-                    clipboardData['image/png'] = new Blob([ab], {type: mimeString});
-                }
-
-                const item = new ClipboardItem(clipboardData);
-                await navigator.clipboard.write([item]);
-                showToast("✅ 已复制图文到本地剪贴板");
-
-            } catch (err) {
-                // 降级方案
-                try {
-                    await navigator.clipboard.writeText(editor.innerText);
-                    showToast("⚠️ 图片复制受限，已复制纯文本");
-                } catch (e) {
-                    showToast("❌ 复制失败，请手动 Ctrl+C");
-                }
-            }
+        // 2. 保存
+        function saveText() {
+            const text = document.getElementById('content').value;
+            fetch('/api/clipboard', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text: text})
+            }).then(() => alert("✅ 已保存到云端"));
         }
 
-        function showToast(msg) {
-            const toast = document.getElementById('toast');
-            toast.innerText = msg;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 2500);
+        // 3. 复制 (HTTPS 环境下完美运行)
+        function copyText() {
+            const text = document.getElementById('content').value;
+            navigator.clipboard.writeText(text).then(() => {
+                alert("✅ 已复制到本地剪贴板");
+            }).catch(() => alert("❌ 复制失败"));
         }
     </script>
 </body>
