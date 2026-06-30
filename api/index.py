@@ -161,6 +161,7 @@ HTML_TEMPLATE = """
             // 彻底抛弃容易出错的正则表达式和 
             const hasText = editor.innerText.trim().length > 0;
             const hasImage = editor.getElementsByTagName('img').length > 0;
+                        const htmlContent = editor.innerHTML;
                         let textToSave = htmlContent.replace(/^(<br\s*\/?>|\s)+|(<br\s*\/?>|\s)+$/g, '') === '' ? "" : htmlContent;
 textToSave += '<br>';
 
