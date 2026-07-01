@@ -43,7 +43,7 @@ HTML_TEMPLATE = """
         :root { --primary: #4f46e5; --bg: #f3f4f6; --card: #ffffff; --text: #1f2937; --border: #d1d5db; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 800px; }
-        h1 { text-align: center; color: var(--primary); margin-bottom: 5px; }
+        h1 { text-align: center; color: var(--primary); margin-bottom: 5px; margin-top: 0; }
         .subtitle { text-align: center; color: #6b7280; font-size: 14px; margin-bottom: 20px; }
         .card { background: var(--card); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); padding: 20px; }
         
@@ -86,7 +86,7 @@ HTML_TEMPLATE = """
                 <button class="btn-secondary" onclick="saveText()">📝 分享内容到云端</button>
             </div>
         </div>
-        <p class="status">每 2 秒自动同步一次 · 粘贴图片会自动上传</p>
+
     </div>
 
     <div id="toast" class="toast"></div>
