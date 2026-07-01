@@ -82,7 +82,7 @@ HTML_TEMPLATE = """
             <div id="editor" class="editor" contenteditable="true" data-placeholder="在这里输入文字，或直接粘贴图片 (Ctrl+V)..."></div>
             
             <div class="actions">
-            <button class="btn-primary" onclick="window.location.reload()">🔄 重新加载内容</button>
+   
                 <button class="btn-primary" onclick="copyContent()">📋 复制内容到本地</button>
                 <button class="btn-secondary" onclick="saveText()">📝 分享内容到云端</button>
             </div>
@@ -131,7 +131,6 @@ HTML_TEMPLATE = """
         // 2. 自动轮询同步 (智能防覆盖逻辑)
         let isSyncing = false; // 防止重复请求
         function sync() {
-showToast("正在加载内容...");
             fetch('/api/clipboard')
                 .then(r => r.json())
                 .then(data => {
@@ -156,7 +155,8 @@ isSyncing = true;
                 })
                 .catch(err => console.error("Sync error:", err));
         }
-                sync(); 
+    showToast("正在加载内容...");
+    sync(); 
 
 setInterval(function() {
     // 在这里定义要执行的代码
