@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 # --- 数据库连接 (Vercel KV / Redis) ---
 # Vercel 绑定 KV 后会自动注入 KV_URL 环境变量
-redis_url = os.environ.get("REDIS_URL") or os.environ.get("KV_URL")
+redis_url =  os.environ.get("KV_URL")
 if redis_url:
     # ssl_cert_reqs=None 用于避免 Serverless 环境下的 SSL 证书报错
     r = redis.from_url(redis_url, ssl_cert_reqs=None)
