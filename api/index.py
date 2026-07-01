@@ -49,7 +49,7 @@ HTML_TEMPLATE = """
         
         /* 替换 textarea 为 contenteditable div */
         .editor { 
-            width: 100%; min-height: 400px; max-height: 600px; overflow-y: auto; 
+            width: 100%; min-height: 300px; max-height: 500px; overflow-y: auto; 
             padding: 15px; font-size: 16px; line-height: 1.5; 
             border: 2px solid var(--border); border-radius: 8px; 
             box-sizing: border-box; outline: none; transition: border-color 0.2s; 
@@ -75,11 +75,10 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <h1>📋 云共享剪贴板</h1>
-        <p class="subtitle">可编辑内容分享到云端，或将云端内容复制到本地，以便于跨设备分享内容。(云内容会在几分钟后失效)</p>
         
         <div class="card">
             <!-- 使用 contenteditable 替代 textarea -->
-            <div id="editor" class="editor" contenteditable="true" data-placeholder="在这里输入文字，或直接粘贴图片 (Ctrl+V)..."></div>
+            <div id="editor" class="editor" contenteditable="true" data-placeholder="在这里输入文字，或直接粘贴图片 (Ctrl+V)...可分享内容到云端，或将云端内容复制到本地，以便于跨设备分享内容。(云内容会在几分钟后失效)"></div>
             
             <div class="actions">
    
