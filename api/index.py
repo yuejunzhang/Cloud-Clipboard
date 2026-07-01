@@ -75,7 +75,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <h1>📋 云共享剪贴板</h1>
-        <p class="subtitle">可编辑内容分享到云端，或将云端内容复制到本地。(内容会在几分钟后失效)</p>
+        <p class="subtitle">可编辑内容分享到云端，或将云端内容复制到本地，以便于跨设备分享内容。(云内容会在几分钟后失效)</p>
         
         <div class="card">
             <!-- 使用 contenteditable 替代 textarea -->
@@ -86,7 +86,6 @@ HTML_TEMPLATE = """
                 <button class="btn-primary" onclick="copyContent()">📋 复制内容到本地</button>
                 <button class="btn-secondary" onclick="saveText()">📝 分享内容到云端</button>
             </div>
-            <p class="warning">⚠️ 受限于浏览器安全策略，若图片无法直接写入本地剪贴板，请右键图片复制或长按保存。</p>
         </div>
         <p class="status">每 2 秒自动同步一次 · 粘贴图片会自动上传</p>
     </div>
@@ -130,6 +129,7 @@ HTML_TEMPLATE = """
         });
 
         // 2. 自动轮询同步 (智能防覆盖逻辑)
+        let isSyncing = false; // 防止重复请求
         function sync() {
 showToast("正在加载内容...");
             fetch('/api/clipboard')
@@ -137,7 +137,7 @@ showToast("正在加载内容...");
                 .then(data => {
                     // 如果服务器内容没变，直接返回
                     if (data.text === lastContent) return;
-
+isSyncing = true;
                     const isFocused = document.activeElement === editor;
 
                     // 核心逻辑：
@@ -147,16 +147,22 @@ showToast("正在加载内容...");
                         lastContent = data.text;
                         // 刷新后重置状态
                         isUserTyping = false; 
+                        isSyncing = false;
                     } else {
                         // 正在打字中 -> 拒绝刷新，保护用户输入，并给出提示
                         showToast("🔔 收到新内容，正在保护您的编辑...");
+                        isSyncing = false;
                     }
                 })
                 .catch(err => console.error("Sync error:", err));
         }
                 sync(); 
 
-    
+setInterval(function() {
+    // 在这里定义要执行的代码
+   if(!isSyncing) sync(); 
+}, 2000);
+
 
         // 3. 保存内容到服务器 (优化了空值判断)
         function saveText(isAuto = false) {
