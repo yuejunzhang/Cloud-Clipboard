@@ -2,7 +2,7 @@ import socket
 import threading
 import time
 import webbrowser
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string ,make_response
 
 # --- 配置 ---
 HOST = '0.0.0.0'  
@@ -33,13 +33,13 @@ HTML_TEMPLATE = """
         :root { --primary: #4f46e5; --bg: #f3f4f6; --card: #ffffff; --text: #1f2937; --border: #d1d5db; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 800px; }
-        h1 { text-align: center; color: var(--primary); margin-bottom: 5px; }
+        h1 { text-align: center; color: var(--primary); margin-bottom: 5px; margin-top: 0; }
         .subtitle { text-align: center; color: #6b7280; font-size: 14px; margin-bottom: 20px; }
         .card { background: var(--card); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); padding: 20px; }
         
         /* 替换 textarea 为 contenteditable div */
         .editor { 
-            width: 100%; min-height: 400px; max-height: 600px; overflow-y: auto; 
+            width: 100%; min-height: 300px; max-height: 500px; overflow-y: auto; 
             padding: 15px; font-size: 16px; line-height: 1.5; 
             border: 2px solid var(--border); border-radius: 8px; 
             box-sizing: border-box; outline: none; transition: border-color 0.2s; 
@@ -56,88 +56,144 @@ HTML_TEMPLATE = """
         .btn-secondary { background-color: #10b981; color: white; }
         .btn-secondary:hover { background-color: #059669; }
         
-        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100;}
+        .toast { position: fixed; bottom: 300px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100;}
         .toast.show { opacity: 1; }
         .status { text-align: center; font-size: 12px; color: #9ca3af; margin-top: 15px; }
         .warning { color: #ef4444; font-size: 12px; text-align: center; margin-top: 10px;}
+                #qrcode {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        margin: 0;
+        z-index: 10000;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+        padding: 15px;
+        cursor: default;
+        }
     </style>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
     <div class="container">
         <h1>📋 云共享剪贴板</h1>
-        <p class="subtitle">支持图文混排 · 局域网内实时同步</p>
         
         <div class="card">
+        <div id="qrcode"></div>
             <!-- 使用 contenteditable 替代 textarea -->
-            <div id="editor" class="editor" contenteditable="true" data-placeholder="在这里输入文字，或直接粘贴图片 (Ctrl+V)..."></div>
+            <div id="editor" class="editor" contenteditable="true" data-placeholder="在这里输入文字，或直接粘贴图片 (Ctrl+V)...可分享内容到云端，或将云端内容复制到本地，以便于跨设备分享内容。(云内容会在几分钟后失效)"></div>
             
             <div class="actions">
-                <button class="btn-primary" onclick="copyContent()">📋 复制内容</button>
-                <button class="btn-secondary" onclick="saveText()">📝 分享内容</button>
+   
+                <button class="btn-primary" onclick="copyContent()">📋 复制内容到本地</button>
+                <button class="btn-secondary" onclick="saveText()">📝 分享内容到云端</button>
+<button class="btn-secondary" onclick="generateQRCode()">
+    <img src="/2dcode.png"  style="
+        width: 20px; 
+        height: 20px; 
+        vertical-align: middle; /* 让图片和文字垂直居中对齐 */
+        margin-right: 8px;      /* 图片和文字之间留点间距 */
+    ">
+    扫码分享
+</button>
             </div>
-            <p class="warning">⚠️ 受限于浏览器安全策略，图片无法直接写入系统剪贴板，请右键图片复制或长按保存。</p>
         </div>
-        <p class="status">每 2 秒自动同步一次 · 粘贴图片会自动上传</p>
+
     </div>
 
     <div id="toast" class="toast"></div>
 
     <script>
+        // 获取完整的 URL
+        var fullUrl = window.location.href;
+        // 创建一个新的 URL 对象
+        var url = new URL(fullUrl);
+        // 获取查询字符串部分
+        var searchParams = new URLSearchParams(url.search);
+        var sValue = searchParams.get('s'); // 返回 "2dcode"
+        
         let lastContent = "";
+        let isUserTyping = false; // 核心状态：标记用户是否正在输入
         const editor = document.getElementById('editor');
+
+        // --- 状态监听：当用户开始输入时，标记为正在编辑 ---
+        editor.addEventListener('input', () => {
+            isUserTyping = true;
+        });
 
         // 1. 拦截粘贴事件，处理图片
         editor.addEventListener('paste', (e) => {
             const items = e.clipboardData.items;
-            let hasImage = false;
-            
             for (let item of items) {
                 if (item.type.startsWith('image/')) {
-                    hasImage = true;
-                    e.preventDefault(); // 阻止默认粘贴行为
-                    
+                    e.preventDefault(); 
                     const file = item.getAsFile();
-                    const reader = new FileReader();
+                    if (!file) continue;
                     
+                    const reader = new FileReader();
                     reader.onload = (event) => {
-                        // 将图片转为 Base64 并插入编辑器
                         const img = document.createElement('img');
                         img.src = event.target.result;
                         editor.appendChild(img);
-                        editor.appendChild(document.createElement('br')); // 换行
+                        editor.appendChild(document.createElement('br')); 
                         
                         // 粘贴图片后自动保存
                         saveText(true); 
                         showToast("🖼️ 图片已插入");
                     };
                     reader.readAsDataURL(file);
+                    break; 
                 }
             }
-            // 如果是纯文本，不阻止默认行为，让它正常粘贴
         });
 
-        // 2. 自动轮询同步 (每2秒)
+        // 2. 自动轮询同步 (智能防覆盖逻辑)
+        let isSyncing = false; // 防止重复请求
         function sync() {
             fetch('/api/clipboard')
                 .then(r => r.json())
                 .then(data => {
-                    // 如果服务器内容变了，且当前编辑器没有获得焦点
-                    if (data.text !== lastContent && document.activeElement !== editor) {
+                    // 如果服务器内容没变，直接返回
+                    if (data.text === lastContent) return;
+isSyncing = true;
+                    const isFocused = document.activeElement === editor;
+
+                    // 核心逻辑：
+                    // 如果没有焦点，或者虽然有焦点但用户还没开始打字 (isUserTyping === false) -> 安全刷新
+                    if (!isFocused || !isUserTyping) {
                         editor.innerHTML = data.text;
                         lastContent = data.text;
+                        // 刷新后重置状态
+                        isUserTyping = false; 
+                        isSyncing = false;
+                    } else {
+                        // 正在打字中 -> 拒绝刷新，保护用户输入，并给出提示
+                        showToast("🔔 收到新内容，正在保护您的编辑...");
+                        isSyncing = false;
                     }
                 })
                 .catch(err => console.error("Sync error:", err));
         }
-        setInterval(sync, 2000);
-        sync(); 
+    showToast("正在加载内容...");
+    sync(); 
 
-        // 3. 保存内容到服务器
+setInterval(function() {
+    // 在这里定义要执行的代码
+   if(!isSyncing) sync(); 
+}, 2000);
+
+
+        // 3. 保存内容到服务器 (优化了空值判断)
         function saveText(isAuto = false) {
-            const htmlContent = editor.innerHTML;
-            
-            // 简单优化：如果内容只是 <br> 或空，视为空字符串
-            const textToSave = htmlContent.replace(/^(<br\s*\/?>|\s)+|(<br\s*\/?>|\s)+$/g, '') === '' ? "" : htmlContent;
+            // 智能判断是否为空：如果没有纯文本，且没有图片，则视为空字符串
+            // 彻底抛弃容易出错的正则表达式和 
+            const hasText = editor.innerText.trim().length > 0;
+            const hasImage = editor.getElementsByTagName('img').length > 0;
+                        const htmlContent = editor.innerHTML;
+                        let textToSave = htmlContent.replace(/^(<br\s*\/?>|\s)+|(<br\s*\/?>|\s)+$/g, '') === '' ? "" : htmlContent;
+textToSave += '<br>';
 
             fetch('/api/clipboard', {
                 method: 'POST',
@@ -148,20 +204,19 @@ HTML_TEMPLATE = """
             .then(data => {
                 if(data.status === 'success') {
                     lastContent = textToSave; 
+                    isUserTyping = false; // 关键：保存成功后，重置输入状态
                     if(!isAuto) showToast("✅ 已分享到云端");
                 }
             });
         }
 
-        // 4. 复制内容
+        // 4. 复制内容到系统剪贴板
         function copyContent() {
             if (!editor.innerText.trim() && editor.getElementsByTagName('img').length === 0) {
                 showToast("⚠️ 内容为空");
                 return;
             }
 
-            // 尝试使用现代 API 复制富文本 (包含图片)
-            // 注意：在局域网 HTTP 下，这通常会失败，会走 catch 逻辑
             try {
                 const htmlBlob = new Blob([editor.innerHTML], { type: 'text/html' });
                 const textBlob = new Blob([editor.innerText], { type: 'text/plain' });
@@ -180,10 +235,10 @@ HTML_TEMPLATE = """
             }
         }
 
-        // 回退复制方案 (只能复制纯文本)
+        // 回退复制方案
         function fallbackCopy() {
             const textArea = document.createElement("textarea");
-            textArea.value = editor.innerText; // 只复制纯文本部分
+            textArea.value = editor.innerText; 
             document.body.appendChild(textArea);
             textArea.select();
             try {
@@ -199,17 +254,48 @@ HTML_TEMPLATE = """
             const toast = document.getElementById('toast');
             toast.innerText = msg;
             toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 2000);
+            setTimeout(() => toast.classList.remove('show'), 2500);
         }
+        let qrcode=document.getElementById("qrcode");
+        qrcode.style.display="none";
+        function generateQRCode() {
+            // 获取路径部分
+            var currentURL = fullUrl.split('?')[0];//+ "?s=2dcode";
+
+            if(qrcode.style.display==="block"){
+                qrcode.style.display="none"; // 隐藏二维码容器
+                return; // 如果二维码已经显示，则点击按钮后隐藏它
+            } else{
+                qrcode.style.display==="block";
+                //
+            }
+            if (currentURL) {
+                qrcode.innerHTML = ""; // 清空之前的二维码
+                qrcode.style.display = "block"; // 显示二维码容器
+                var qrCodeInstance = new QRCode(qrcode, {
+                text: currentURL ,
+                width: 200,
+                height: 200,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H // 纠错等级
+                });
+            } else {
+                alert("请输入内容生成二维码");
+            }
+        }
+
     </script>
 </body>
 </html>
 """
 
+
 # --- Flask 路由 (完全不需要修改) ---
 @app.route('/')
 def index():
     return render_template_string(HTML_TEMPLATE)
+    
 
 @app.route('/api/clipboard', methods=['GET'])
 def get_clipboard():

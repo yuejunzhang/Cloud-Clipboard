@@ -70,13 +70,28 @@ HTML_TEMPLATE = """
         .toast.show { opacity: 1; }
         .status { text-align: center; font-size: 12px; color: #9ca3af; margin-top: 15px; }
         .warning { color: #ef4444; font-size: 12px; text-align: center; margin-top: 10px;}
+                #qrcode {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        margin: 0;
+        z-index: 10000;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+        padding: 15px;
+        cursor: default;
+        }
     </style>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
     <div class="container">
         <h1>📋 云共享剪贴板</h1>
         
         <div class="card">
+        <div id="qrcode"></div>
             <!-- 使用 contenteditable 替代 textarea -->
             <div id="editor" class="editor" contenteditable="true" data-placeholder="在这里输入文字，或直接粘贴图片 (Ctrl+V)...可分享内容到云端，或将云端内容复制到本地，以便于跨设备分享内容。(云内容会在几分钟后失效)"></div>
             
@@ -84,6 +99,15 @@ HTML_TEMPLATE = """
    
                 <button class="btn-primary" onclick="copyContent()">📋 复制内容到本地</button>
                 <button class="btn-secondary" onclick="saveText()">📝 分享内容到云端</button>
+<button class="btn-secondary" onclick="generateQRCode()">
+    <img src="/2dcode.png"  style="
+        width: 20px; 
+        height: 20px; 
+        vertical-align: middle; /* 让图片和文字垂直居中对齐 */
+        margin-right: 8px;      /* 图片和文字之间留点间距 */
+    ">
+    扫码分享
+</button>
             </div>
         </div>
 
@@ -92,6 +116,14 @@ HTML_TEMPLATE = """
     <div id="toast" class="toast"></div>
 
     <script>
+        // 获取完整的 URL
+        var fullUrl = window.location.href;
+        // 创建一个新的 URL 对象
+        var url = new URL(fullUrl);
+        // 获取查询字符串部分
+        var searchParams = new URLSearchParams(url.search);
+        var sValue = searchParams.get('s'); // 返回 "2dcode"
+        
         let lastContent = "";
         let isUserTyping = false; // 核心状态：标记用户是否正在输入
         const editor = document.getElementById('editor');
@@ -234,6 +266,35 @@ textToSave += '<br>';
             toast.classList.add('show');
             setTimeout(() => toast.classList.remove('show'), 2500);
         }
+        let qrcode=document.getElementById("qrcode");
+        qrcode.style.display="none";
+        function generateQRCode() {
+            // 获取路径部分
+            var currentURL = fullUrl.split('?')[0];//+ "?s=2dcode";
+
+            if(qrcode.style.display==="block"){
+                qrcode.style.display="none"; // 隐藏二维码容器
+                return; // 如果二维码已经显示，则点击按钮后隐藏它
+            } else{
+                qrcode.style.display==="block";
+                //
+            }
+            if (currentURL) {
+                qrcode.innerHTML = ""; // 清空之前的二维码
+                qrcode.style.display = "block"; // 显示二维码容器
+                var qrCodeInstance = new QRCode(qrcode, {
+                text: currentURL ,
+                width: 200,
+                height: 200,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H // 纠错等级
+                });
+            } else {
+                alert("请输入内容生成二维码");
+            }
+        }
+
     </script>
 </body>
 </html>
