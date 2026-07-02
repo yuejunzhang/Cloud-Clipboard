@@ -100,12 +100,14 @@ HTML_TEMPLATE = """
                 <button class="btn-primary" onclick="copyContent()">📋 复制内容到本地</button>
                 <button class="btn-secondary" onclick="saveText()">📝 分享内容到云端</button>
 <button class="btn-secondary" onclick="generateQRCode()">
-    <img src="/2dcode.png"  style="
-        width: 20px; 
-        height: 20px; 
-        vertical-align: middle; /* 让图片和文字垂直居中对齐 */
-        margin-right: 8px;      /* 图片和文字之间留点间距 */
-    ">
+    <svg viewBox="0 0 24 24" width="20" height="20" style="vertical-align: middle; margin-right: 8px;" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+        <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+        <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+        <path d="M14 14h3v3h-3z"></path>
+        <path d="M21 14v7h-7"></path>
+        <path d="M14 21h7"></path>
+    </svg>
     扫码分享
 </button>
             </div>
