@@ -93,7 +93,7 @@ HTML_TEMPLATE = """
         <div class="card">
         <div id="qrcode"></div>
             <!-- 使用 contenteditable 替代 textarea -->
-            <div id="editor" class="editor" contenteditable="true" data-placeholder="在这里输入文字，或直接粘贴图片 (Ctrl+V)...可分享内容到云端，或将云端内容复制到本地，以便于跨设备分享内容。(云内容会在几分钟后失效)"></div>
+            <div id="editor" class="editor" contenteditable="true" data-placeholder="在这里输入文字，或直接粘贴图片 (Ctrl+V)...可分享内容到云端，或将云端内容复制到本地，以便于跨设备共享享内容。(云内容会在几分钟后失效，请及时复制到本地。)"></div>
             
             <div class="actions">
    
